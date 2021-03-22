@@ -16,7 +16,7 @@ options(width = 120)
 setwd("~/Projects/Consultations/Favre Lucie (DXA)")
 
 # Data
-data0 <- read_xlsx("data-raw/ID matching (DXA + 12 months).xlsx")
+data0 <- read_xlsx("data-raw/OsteoLaus DXA no blank.xlsx")
 data0 <- as.data.frame(data0)
 data1 <- read_xlsx("data-raw/COOL-OsteoLaus for stat (clean).xlsx",
                    sheet = "OsteoLaus + COOL subject")
@@ -73,7 +73,7 @@ ctrl_ids <- unique(ctrl_ids)
 length(ctrl_ids)
 
 # Export results
-mdir <- "results/matching_20210322/690_controls"
+mdir <- "results/matching_20210322/1233_controls"
 if (!dir.exists(mdir)) dir.create(mdir, recursive = TRUE)
 for (cs in names(mlist)) {
   for (r in names(mlist[[cs]])) {
