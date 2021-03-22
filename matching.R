@@ -20,12 +20,12 @@ data0 <- read_xlsx("data-raw/ID matching (DXA + 12 months).xlsx")
 data0 <- as.data.frame(data0)
 data1 <- read_xlsx("data-raw/COOL-OsteoLaus for stat (clean).xlsx",
                    sheet = "OsteoLaus + COOL subject")
-data1 <- as.data.frame(data1)
+data1 <- as.data.frame(data1[data1[[12]] %in% 0, 9:11])
 data1$DX03_age <- as.numeric(data1$DX03_age)
 data1$DX06_BMI <- as.numeric(data1$DX06_BMI)
 coln <- c("id", "age", "bmi")
 data <- rbind(cbind(grp = 0, setNames(data0, coln)),
-              cbind(grp = 1, setNames(data1[9:11], coln)))
+              cbind(grp = 1, setNames(data1, coln)))
 data <- data[!is.na(data$age) & !is.na(data$bmi), ]
 if (any(is.na(data))) stop("missing values")
 rm(data0, data1, coln)
@@ -73,8 +73,8 @@ ctrl_ids <- unique(ctrl_ids)
 length(ctrl_ids)
 
 # Export results
-mdir <- "results/matching_20210315"
-if (!dir.exists(mdir)) dir.create(mdir)
+mdir <- "results/matching_20210322/690_controls"
+if (!dir.exists(mdir)) dir.create(mdir, recursive = TRUE)
 for (cs in names(mlist)) {
   for (r in names(mlist[[cs]])) {
     m <- mlist[[cs]][[r]]$m
@@ -102,7 +102,7 @@ pdf(file.path(mdir, "boxplot_bmi.pdf"))
 print(bps$bmi)
 dev.off()
 save(mlist, file = file.path(mdir, "mlist.rda"), compress = "xz")
-sink("results/matching_sessionInfo_20210315.R")
+sink("results/matching_sessionInfo_20210322.txt")
 print(sessionInfo(), locale = FALSE)
 sink()
 
