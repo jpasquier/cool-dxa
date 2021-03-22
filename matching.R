@@ -1,5 +1,13 @@
+#  __  __         _         _      _                 ____ __  __    _
+# |  \/  |  __ _ | |_  ___ | |__  (_) _ __    __ _  |  _ \\ \/ /   / \
+# | |\/| | / _` || __|/ __|| '_ \ | || '_ \  / _` | | | | |\  /   / _ \
+# | |  | || (_| || |_| (__ | | | || || | | || (_| | | |_| |/  \  / ___ \
+# |_|  |_| \__,_| \__|\___||_| |_||_||_| |_| \__, | |____//_/\_\/_/   \_\
+#                                            |___/
+
 library(readxl)
 library(MatchIt)
+library(ggplot2)
 
 set.seed(666)
 options(width = 120)
@@ -8,18 +16,29 @@ options(width = 120)
 setwd("~/Projects/Consultations/Favre Lucie (DXA)")
 
 # Data
-data0 <- read_xlsx("data-raw/COOL-OsteoLaus for stat (clean).xlsx",
-                   sheet = "OsteoLaus + COOL subject")
+data0 <- read_xlsx("data-raw/ID matching (DXA + 12 months).xlsx")
 data0 <- as.data.frame(data0)
-data0$DX03_age <- as.numeric(data0$DX03_age)
-data0$DX06_BMI <- as.numeric(data0$DX06_BMI)
-coln <- c("id", "age", "bmi", "oh")
-data <- rbind(cbind(grp = 0, setNames(data0[1:4], coln)),
-              cbind(grp = 1, setNames(data0[9:12], coln)))
+data1 <- read_xlsx("data-raw/COOL-OsteoLaus for stat (clean).xlsx",
+                   sheet = "OsteoLaus + COOL subject")
+data1 <- as.data.frame(data1)
+data1$DX03_age <- as.numeric(data1$DX03_age)
+data1$DX06_BMI <- as.numeric(data1$DX06_BMI)
+coln <- c("id", "age", "bmi")
+data <- rbind(cbind(grp = 0, setNames(data0, coln)),
+              cbind(grp = 1, setNames(data1[9:11], coln)))
 data <- data[!is.na(data$age) & !is.na(data$bmi), ]
-data <- data[!with(data, grp == 1 & !is.na(oh) & oh == 1), ]
-sapply(data, function(x) sum(is.na(x)))
-rm(coln)
+if (any(is.na(data))) stop("missing values")
+rm(data0, data1, coln)
+
+# Apperçu des données
+tmp <- data
+tmp$grp <- factor(tmp$grp, 0:1, c("OsteoLaus", "DXA"))
+bps <- list()
+bps$age <- ggplot(tmp, aes(x = factor(grp), y = age)) +
+  geom_boxplot() + labs(title = "Age", x = "")
+bps$bmi <- ggplot(tmp, aes(x = factor(grp), y = bmi)) +
+  geom_boxplot() + labs(title = "BMI", x = "")
+rm(tmp)
 
 # Matching
 mlist <- lapply(c(cs0 = 1, cs1 = 2), function(l) {
@@ -54,7 +73,7 @@ ctrl_ids <- unique(ctrl_ids)
 length(ctrl_ids)
 
 # Export results
-mdir <- "results/matching_20210211"
+mdir <- "results/matching_20210315"
 if (!dir.exists(mdir)) dir.create(mdir)
 for (cs in names(mlist)) {
   for (r in names(mlist[[cs]])) {
@@ -76,8 +95,14 @@ for (cs in names(mlist)) {
 }
 write.table(data.frame(`OsteoLaus ID` = ctrl_ids), row.names = FALSE,
             quote = FALSE, file = file.path(mdir, "matched_osteolaus_ids.csv"))
+pdf(file.path(mdir, "boxplot_age.pdf"))
+print(bps$age)
+dev.off()
+pdf(file.path(mdir, "boxplot_bmi.pdf"))
+print(bps$bmi)
+dev.off()
 save(mlist, file = file.path(mdir, "mlist.rda"), compress = "xz")
-sink("results/matching_sessionInfo_20210211.R")
+sink("results/matching_sessionInfo_20210315.R")
 print(sessionInfo(), locale = FALSE)
 sink()
 
