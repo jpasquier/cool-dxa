@@ -1,7 +1,8 @@
 ---
 title: "DXA : Analyses statistiques"
 author: Jérôme Pasquier (Unisanté)
-date: 15 février 2021
+date: 3 mars 2021
+geometry: margin=2cm
 output:
   pdf_document:
     toc: true
@@ -15,6 +16,7 @@ library(knitr)
 library(dplyr)
 library(tidyr)
 library(ggplot2)
+library(gridExtra)
 library(stargazer)
 
 opts_chunk$set(echo = FALSE)
@@ -40,8 +42,18 @@ for (v in names(dxa)) {
   }
 }
 rm(v, x)
+dxa$DXA_Date <- as.Date(dxa$DXA_Date, format = "%d/%m/%Y")
+dxa$`Date Bariatric surgery` <- 
+  as.Date(dxa$`Date Bariatric surgery`, format = "%d/%m/%Y")
+
+# Help function(s)
+getfml <- function(fit) {
+  as.character(fit$call$formula) %>% {paste(.[2], .[1], .[3])}
+}
 
 ```
+
+<!-- ====================================================================== -->
 
 # Analyses descriptives
 
@@ -94,25 +106,28 @@ rm(V)
 
 ```
 
+<!-- ====================================================================== -->
+
 # Analyses de régression
 
 ```{r, echo=FALSE}
 
 rename_matrix <- matrix(byrow = TRUE, ncol = 2, c(
-  "DX03_age",                          "Age",
-  "DX06_BMI",                          "BMI",
-  "Total weight loss (TWL)",           "TWL", 
-  "Excès weight loss",                 "EWL",
-  "DX58_LeanMassTot%",                 "LeanMassTot",
-  "DX62_ALMI (indice de masse maigre appendiculaire ajusté)",
-                                       "ALMI",
-  "DX55_Tissu adipeux viscéral (VAT)", "VAT",
+  "DX03_age",                          "DX03_Age",
+  "DX06_BMI",                          "DX06_BMI",
+  "Total weight loss (TWL)",           "TotalWeightLoss", 
+  "Excès weight loss",                 "ExcessWeightLoss",
+  "DX58_LeanMassTot%",                 "DX58_LeanMassTotPercent",
+  "DX62_ALMI (indice de masse maigre appendiculaire ajusté)", "DX62_ALMI",
+  "Nadir weight",                      "NadirWeight",
+  "DX55_Tissu adipeux viscéral (VAT)", "DX55_VAT",
   "T2D-PreOp",                         "T2DPreOp",
   "HTA-PreOp",                         "HTAPreOp",
   "Dyslipidemia-PreOp",                "DyslipidemiaPreOp",
   "T2D-PostOp",                        "T2DPostOp",
   "HTA-PostOp",                        "HTAPostOp",
-  "Dyslipidemia-PostOp",               "DyslipidemiaPostOp"
+  "Dyslipidemia-PostOp",               "DyslipidemiaPostOp",
+  "DX59_FatMassTotale%",               "DX59_FatMassTotPercent"
 ))
 colnames(rename_matrix) <- c("Name in xlsx file", "Name in analyses")
 dta <- dxa
@@ -120,210 +135,292 @@ for (i in 1:nrow(rename_matrix)) {
   names(dta)[names(dta) == rename_matrix[i, 1]] <- rename_matrix[i, 2]
 }
 rm(rename_matrix, i)
+dta$FollowUpYears <- as.numeric(dta$DXA_Date - dxa$`Date Bariatric surgery`)
+dta$FollowUpYears <- dta$FollowUpYears / 365.2425
+dta$DX03_Age_C <- dta$DX03_Age - mean(dta$DX03_Age)
+dta$TotalWeightLoss_C <- dta$TotalWeightLoss - mean(dta$TotalWeightLoss)
+dta$ExcessWeightLoss_C <- dta$ExcessWeightLoss - mean(dta$ExcessWeightLoss)
+dta$NadirWeight_C <- dta$NadirWeight - mean(dta$NadirWeight)
+dta$FollowUpYears_C <- dta$FollowUpYears - mean(dta$FollowUpYears)
+dta$DX59_FatMassTotPercent_C <-
+  dta$DX59_FatMassTotPercent - mean(dta$DX59_FatMassTotPercent)
 
 ```
 
-<!-- ====================================================================== -->
+<!-- ================== Outcome: DX58_LeanMassTotPercent ================== -->
 
-## Variable dépendante : `TotalWeightLoss (TWL)`
+## Variable dépendante : `DX58_LeanMassTotPercent`
 
-### Univariable model 1 (`LeanMassTot`)
+### Régressions univariables
+
+```{r, fig.show="hold"}
+X <- c("TotalWeightLoss", "ExcessWeightLoss", "NadirWeight", "DX03_Age",
+       "FollowUpYears")
+figs <- lapply(X, function(x) {
+  fml <- as.formula(paste("DX58_LeanMassTotPercent ~", x))
+  fit <- lm(fml, dta)
+  b <- signif(coef(fit)[[2]], 3)
+  ci <- signif(confint(fit)[2, ], 3)
+  p <- coef(summary(fit))[2, "Pr(>|t|)" ]
+  p <- if (p >= 0.001) paste0("p=", round(p, 3)) else "p<0.001"
+  r2 <- paste0("R2=", round(summary(fit)$r.squared, 3))
+  cap <- paste0("b = ", b, " (", ci[1], ",", ci[2], "), ", p, ", ", r2)
+  fig <- ggplot(dta, aes_string(y = "DX58_LeanMassTotPercent", x = x)) +
+    geom_point() +
+    geom_smooth(method = lm, formula = y ~ x, se = FALSE) +
+    labs(caption = cap, y = "LeanMassTotPrct") +
+    theme(axis.title=element_text(size = rel(.75)))
+})
+do.call(grid.arrange, append(figs, list(ncol = 2)))
+rm(X, figs)
+```
+
+```{r, fig.show="hold"}
+X <- c("TotalWeightLoss", "ExcessWeightLoss")
+figs <- lapply(X, function(x) {
+  fml <- as.formula(paste("NadirWeight ~", x))
+  fit <- lm(fml, dta)
+  b <- signif(coef(fit)[[2]], 3)
+  ci <- signif(confint(fit)[2, ], 3)
+  p <- coef(summary(fit))[2, "Pr(>|t|)" ]
+  p <- if (p >= 0.001) paste0("p=", round(p, 3)) else "p<0.001"
+  r2 <- paste0("R2=", round(summary(fit)$r.squared, 3))
+  cap <- paste0("b = ", b, " (", ci[1], ",", ci[2], "), ", p, ", ", r2)
+  fig <- ggplot(dta, aes_string(y = "NadirWeight", x = x)) +
+    geom_point() +
+    geom_smooth(method = lm, formula = y ~ x, se = FALSE) +
+    labs(caption = cap) +
+    theme(axis.title=element_text(size = rel(.75)))
+})
+do.call(grid.arrange, append(figs, list(ncol = 2)))
+rm(X, figs)
+```
+
+<!-- ================== Outcome: DX58_LeanMassTotPercent ================== -->
+
+### Régressions multivariables - Exposition : `TotalWeightLoss`
+
+```{r}
+fits <- list(
+  lm(DX58_LeanMassTotPercent ~ TotalWeightLoss_C * NadirWeight_C, dta),
+  lm(DX58_LeanMassTotPercent ~ TotalWeightLoss_C * DX03_Age_C, dta),
+  lm(DX58_LeanMassTotPercent ~ TotalWeightLoss_C * FollowUpYears_C, dta),
+  lm(DX58_LeanMassTotPercent ~ TotalWeightLoss_C + NadirWeight_C +
+       FollowUpYears_C + DX03_Age_C, dta),
+  lm(DX58_LeanMassTotPercent ~ TotalWeightLoss_C * NadirWeight_C +
+       FollowUpYears_C + DX03_Age_C, dta),
+  lm(DX58_LeanMassTotPercent ~ TotalWeightLoss_C * (NadirWeight_C +
+       FollowUpYears_C + DX03_Age_C), dta)
+)
+```
 
 \begin{center}
 ```{r, echo=FALSE, results='asis'}
-m1 <- lm(TWL ~ LeanMassTot, dta)
-m2 <- lm(TWL ~ LeanMassTot + Age + BMI, dta)
-stargazer(m1, m2, dep.var.labels=c("Total weight loss"), ci=TRUE,
-          ci.level=0.95, single.row=TRUE, float = FALSE, header = FALSE,
-          intercept.bottom = FALSE, intercept.top = TRUE,
-          model.numbers = FALSE)
+stargazer(fits[[1]], fits[[2]], fits[[3]],
+          dep.var.labels=c("DX58LeanMassTotPercent"), single.row=TRUE,
+          float = FALSE, header = FALSE, intercept.bottom = FALSE,
+          intercept.top = TRUE, model.numbers = FALSE)
 ```
 \end{center}
-
-```{r, message=FALSE, fig.show="hold", out.width="50%"}
-ggplot(dta, aes(x = LeanMassTot, y = TWL)) +
-  geom_point() +
-  geom_smooth(method = lm, se = FALSE) +
-  labs(title = "TotalWeightLoss ~ LeanMassTot")
-rbind(
-  data.frame(rstd = rstandard(m1), m = 1),
-  data.frame(rstd = rstandard(m2), m = 2)
-) %>%
-  mutate(m = factor(m, 1:2, c("Unadjusted model",  "Adjusted model"))) %>%
-  ggplot(aes(sample = rstd)) +
-  stat_qq() +
-  stat_qq_line() +
-  facet_wrap(~ m, ncol = 1) +
-  labs(title = "Normal Q-Q plot", x = "Theoretical Quantiles",
-       y = "Standardized residuals")
-rm(m1, m2)
-```
-
-### Univariable model 2 (`ALMI`)
 
 \begin{center}
 ```{r, echo=FALSE, results='asis'}
-m1 <- lm(TWL ~ ALMI, dta)
-m2 <- lm(TWL ~ ALMI + Age + BMI, dta)
-stargazer(m1, m2, dep.var.labels=c("Total weight loss"), ci=TRUE,
-          ci.level=0.95, single.row=TRUE, float = FALSE, header = FALSE,
-          intercept.bottom = FALSE, intercept.top = TRUE,
-          model.numbers = FALSE)
+stargazer(fits[[4]], fits[[5]], fits[[6]],
+          dep.var.labels=c("DX58LeanMassTotPercent"), single.row=TRUE,
+          float = FALSE, header = FALSE, intercept.bottom = FALSE,
+          intercept.top = TRUE, model.numbers = FALSE)
 ```
 \end{center}
 
-```{r, message=FALSE, fig.show="hold", out.width="50%"}
-ggplot(dta, aes(x = ALMI, y = TWL)) +
-  geom_point() +
-  geom_smooth(method = lm, se = FALSE) +
-  labs(title = "TotalWeightLoss ~ ALMI")
-rbind(
-  data.frame(rstd = rstandard(m1), m = 1),
-  data.frame(rstd = rstandard(m2), m = 2)
-) %>%
-  mutate(m = factor(m, 1:2, c("Unadjusted model",  "Adjusted model"))) %>%
+```{r, message=FALSE, fig.show="hold"}
+do.call(rbind, lapply(fits, function(fit) {
+  data.frame(rstd = rstandard(fit), fml = getfml(fit))
+})) %>%
   ggplot(aes(sample = rstd)) +
   stat_qq() +
   stat_qq_line() +
-  facet_wrap(~ m, ncol = 1) +
+  facet_wrap(~ fml, ncol = 2) +
   labs(title = "Normal Q-Q plot", x = "Theoretical Quantiles",
-       y = "Standardized residuals")
-rm(m1, m2)
+       y = "Standardized residuals") +
+  theme(strip.text.x = element_text(size = rel(.6)))
 ```
 
-### Multivariable model (`LeanMassTot` + `ALMI`)
+<!-- ================== Outcome: DX58_LeanMassTotPercent ================== -->
+
+### Régressions multivariables - Exposition : `ExcessWeightLoss`
+
+```{r}
+fits <- list(
+  lm(DX58_LeanMassTotPercent ~ ExcessWeightLoss_C * NadirWeight_C, dta),
+  lm(DX58_LeanMassTotPercent ~ ExcessWeightLoss_C * DX03_Age_C, dta),
+  lm(DX58_LeanMassTotPercent ~ ExcessWeightLoss_C * FollowUpYears_C, dta),
+  lm(DX58_LeanMassTotPercent ~ ExcessWeightLoss_C + NadirWeight_C +
+       FollowUpYears_C + DX03_Age_C, dta),
+  lm(DX58_LeanMassTotPercent ~ ExcessWeightLoss_C * NadirWeight_C +
+       FollowUpYears_C + DX03_Age_C, dta),
+  lm(DX58_LeanMassTotPercent ~ ExcessWeightLoss_C * (NadirWeight_C +
+       FollowUpYears_C + DX03_Age_C), dta)
+)
+```
 
 \begin{center}
 ```{r, echo=FALSE, results='asis'}
-m1 <- lm(TWL ~ LeanMassTot + ALMI, dta)
-m2 <- lm(TWL ~ LeanMassTot + ALMI + Age + BMI, dta)
-stargazer(m1, m2, dep.var.labels=c("Total weight loss"), ci=TRUE,
-          ci.level=0.95, single.row=TRUE, float = FALSE, header = FALSE,
-          intercept.bottom = FALSE, intercept.top = TRUE,
-          model.numbers = FALSE)
+stargazer(fits[[1]], fits[[2]], fits[[3]],
+          dep.var.labels=c("DX58LeanMassTotPercent"), single.row=TRUE,
+          float = FALSE, header = FALSE, intercept.bottom = FALSE,
+          intercept.top = TRUE, model.numbers = FALSE)
 ```
 \end{center}
-
-```{r, message=FALSE, fig.show="hold", out.width="50%"}
-ggplot(dta, aes(x = LeanMassTot, y = ALMI)) +
-  geom_point() +
-  geom_smooth(method = lm, se = FALSE) +
-  labs(title = "Correlation between the two independent variables")
-rbind(
-  data.frame(rstd = rstandard(m1), m = 1),
-  data.frame(rstd = rstandard(m2), m = 2)
-) %>%
-  mutate(m = factor(m, 1:2, c("Unadjusted model",  "Adjusted model"))) %>%
-  ggplot(aes(sample = rstd)) +
-  stat_qq() +
-  stat_qq_line() +
-  facet_wrap(~ m, ncol = 1) +
-  labs(title = "Normal Q-Q plot", x = "Theoretical Quantiles",
-       y = "Standardized residuals")
-rm(m1, m2)
-```
-
-<!-- ====================================================================== -->
-
-## Variable dépendante : `ExcessWeightLoss (EWL)`
-
-### Univariable model 1 (`LeanMassTot`)
 
 \begin{center}
 ```{r, echo=FALSE, results='asis'}
-m1 <- lm(EWL ~ LeanMassTot, dta)
-m2 <- lm(EWL ~ LeanMassTot + Age + BMI, dta)
-stargazer(m1, m2, dep.var.labels=c("Excess weight loss"), ci=TRUE,
-          ci.level=0.95, single.row=TRUE, float = FALSE, header = FALSE,
-          intercept.bottom = FALSE, intercept.top = TRUE,
-          model.numbers = FALSE)
+stargazer(fits[[4]], fits[[5]], fits[[6]],
+          dep.var.labels=c("DX58LeanMassTotPercent"), single.row=TRUE,
+          float = FALSE, header = FALSE, intercept.bottom = FALSE,
+          intercept.top = TRUE, model.numbers = FALSE)
 ```
 \end{center}
 
-```{r, message=FALSE, fig.show="hold", out.width="50%"}
-ggplot(dta, aes(x = LeanMassTot, y = EWL)) +
-  geom_point() +
-  geom_smooth(method = lm, se = FALSE) +
-  labs(title = "ExcessWeightLoss ~ LeanMassTot")
-rbind(
-  data.frame(rstd = rstandard(m1), m = 1),
-  data.frame(rstd = rstandard(m2), m = 2)
-) %>%
-  mutate(m = factor(m, 1:2, c("Unadjusted model",  "Adjusted model"))) %>%
+```{r, message=FALSE, fig.show="hold"}
+do.call(rbind, lapply(fits, function(fit) {
+  data.frame(rstd = rstandard(fit), fml = getfml(fit))
+})) %>%
   ggplot(aes(sample = rstd)) +
   stat_qq() +
   stat_qq_line() +
-  facet_wrap(~ m, ncol = 1) +
+  facet_wrap(~ fml, ncol = 2) +
   labs(title = "Normal Q-Q plot", x = "Theoretical Quantiles",
-       y = "Standardized residuals")
-rm(m1, m2)
+       y = "Standardized residuals") +
+  theme(strip.text.x = element_text(size = rel(.6)))
 ```
 
-### Univariable model 2 (`ALMI`)
+<!-- ========================= Outcome: DX62_ALMI ========================= -->
+
+## Variable dépendante : `DX62_ALMI`
+
+### Régressions univariables
+
+```{r, fig.show="hold"}
+X <- c("TotalWeightLoss", "ExcessWeightLoss", "NadirWeight", "DX03_Age",
+       "FollowUpYears")
+figs <- lapply(X, function(x) {
+  fml <- as.formula(paste("DX62_ALMI ~", x))
+  fit <- lm(fml, dta)
+  b <- signif(coef(fit)[[2]], 3)
+  ci <- signif(confint(fit)[2, ], 3)
+  p <- coef(summary(fit))[2, "Pr(>|t|)" ]
+  p <- if (p >= 0.001) paste0("p=", round(p, 3)) else "p<0.001"
+  r2 <- paste0("R2=", round(summary(fit)$r.squared, 3))
+  cap <- paste0("b = ", b, " (", ci[1], ",", ci[2], "), ", p, ", ", r2)
+  fig <- ggplot(dta, aes_string(y = "DX62_ALMI", x = x)) +
+    geom_point() +
+    geom_smooth(method = lm, formula = y ~ x, se = FALSE) +
+    labs(caption = cap) +
+    theme(axis.title=element_text(size = rel(.75)))
+})
+do.call(grid.arrange, append(figs, list(nrow = 3)))
+rm(X, figs)
+```
+
+<!-- ========================= Outcome: DX62_ALMI ========================= -->
+
+### Régressions multivariables - Exposition : `TotalWeightLoss`
+
+```{r}
+fits <- list(
+  lm(DX62_ALMI ~ TotalWeightLoss_C * NadirWeight_C, dta),
+  lm(DX62_ALMI ~ TotalWeightLoss_C * DX03_Age_C, dta),
+  lm(DX62_ALMI ~ TotalWeightLoss_C * FollowUpYears_C, dta),
+  lm(DX62_ALMI ~ TotalWeightLoss_C + NadirWeight_C +
+       FollowUpYears_C + DX03_Age_C, dta),
+  lm(DX62_ALMI ~ TotalWeightLoss_C * NadirWeight_C +
+       FollowUpYears_C + DX03_Age_C, dta),
+  lm(DX62_ALMI ~ TotalWeightLoss_C * (NadirWeight_C +
+       FollowUpYears_C + DX03_Age_C), dta)
+)
+```
 
 \begin{center}
 ```{r, echo=FALSE, results='asis'}
-m1 <- lm(EWL ~ ALMI, dta)
-m2 <- lm(EWL ~ ALMI + Age + BMI, dta)
-stargazer(m1, m2, dep.var.labels=c("Excess weight loss"), ci=TRUE,
-          ci.level=0.95, single.row=TRUE, float = FALSE, header = FALSE,
-          intercept.bottom = FALSE, intercept.top = TRUE,
-          model.numbers = FALSE)
+stargazer(fits[[1]], fits[[2]], fits[[3]],
+          dep.var.labels=c("DX62ALMI"), single.row=TRUE,
+          float = FALSE, header = FALSE, intercept.bottom = FALSE,
+          intercept.top = TRUE, model.numbers = FALSE)
 ```
 \end{center}
-
-```{r, message=FALSE, fig.show="hold", out.width="50%"}
-ggplot(dta, aes(x = ALMI, y = EWL)) +
-  geom_point() +
-  geom_smooth(method = lm, se = FALSE) +
-  labs(title = "ExcessWeightLoss ~ ALMI")
-rbind(
-  data.frame(rstd = rstandard(m1), m = 1),
-  data.frame(rstd = rstandard(m2), m = 2)
-) %>%
-  mutate(m = factor(m, 1:2, c("Unadjusted model",  "Adjusted model"))) %>%
-  ggplot(aes(sample = rstd)) +
-  stat_qq() +
-  stat_qq_line() +
-  facet_wrap(~ m, ncol = 1) +
-  labs(title = "Normal Q-Q plot", x = "Theoretical Quantiles",
-       y = "Standardized residuals")
-rm(m1, m2)
-```
-
-### Multivariable model (`LeanMassTot` + `ALMI`)
 
 \begin{center}
 ```{r, echo=FALSE, results='asis'}
-m1 <- lm(EWL ~ LeanMassTot + ALMI, dta)
-m2 <- lm(EWL ~ LeanMassTot + ALMI + Age + BMI, dta)
-stargazer(m1, m2, dep.var.labels=c("Excess weight loss"), ci=TRUE,
-          ci.level=0.95, single.row=TRUE, float = FALSE, header = FALSE,
-          intercept.bottom = FALSE, intercept.top = TRUE,
-          model.numbers = FALSE)
+stargazer(fits[[4]], fits[[5]], fits[[6]],
+          dep.var.labels=c("DX62ALMI"), single.row=TRUE,
+          float = FALSE, header = FALSE, intercept.bottom = FALSE,
+          intercept.top = TRUE, model.numbers = FALSE)
 ```
 \end{center}
 
-```{r, message=FALSE, fig.show="hold", out.width="50%"}
-ggplot(dta, aes(x = LeanMassTot, y = ALMI)) +
-  geom_point() +
-  geom_smooth(method = lm, se = FALSE) +
-  labs(title = "Correlation between the two independent variables")
-rbind(
-  data.frame(rstd = rstandard(m1), m = 1),
-  data.frame(rstd = rstandard(m2), m = 2)
-) %>%
-  mutate(m = factor(m, 1:2, c("Unadjusted model",  "Adjusted model"))) %>%
+```{r, message=FALSE, fig.show="hold"}
+do.call(rbind, lapply(fits, function(fit) {
+  data.frame(rstd = rstandard(fit), fml = getfml(fit))
+})) %>%
   ggplot(aes(sample = rstd)) +
   stat_qq() +
   stat_qq_line() +
-  facet_wrap(~ m, ncol = 1) +
+  facet_wrap(~ fml, ncol = 2) +
   labs(title = "Normal Q-Q plot", x = "Theoretical Quantiles",
-       y = "Standardized residuals")
-rm(m1, m2)
+       y = "Standardized residuals") +
+  theme(strip.text.x = element_text(size = rel(.6)))
 ```
 
-<!-- ====================================================================== -->
+<!-- ================== Outcome: DX62_ALMI ================== -->
+
+### Régressions multivariables - Exposition : `ExcessWeightLoss`
+
+```{r}
+fits <- list(
+  lm(DX62_ALMI ~ ExcessWeightLoss_C * NadirWeight_C, dta),
+  lm(DX62_ALMI ~ ExcessWeightLoss_C * DX03_Age_C, dta),
+  lm(DX62_ALMI ~ ExcessWeightLoss_C * FollowUpYears_C, dta),
+  lm(DX62_ALMI ~ ExcessWeightLoss_C + NadirWeight_C +
+       FollowUpYears_C + DX03_Age_C, dta),
+  lm(DX62_ALMI ~ ExcessWeightLoss_C * NadirWeight_C +
+       FollowUpYears_C + DX03_Age_C, dta),
+  lm(DX62_ALMI ~ ExcessWeightLoss_C * (NadirWeight_C +
+       FollowUpYears_C + DX03_Age_C), dta)
+)
+```
+
+\begin{center}
+```{r, echo=FALSE, results='asis'}
+stargazer(fits[[1]], fits[[2]], fits[[3]],
+          dep.var.labels=c("DX62ALMI"), single.row=TRUE,
+          float = FALSE, header = FALSE, intercept.bottom = FALSE,
+          intercept.top = TRUE, model.numbers = FALSE)
+```
+\end{center}
+
+\begin{center}
+```{r, echo=FALSE, results='asis'}
+stargazer(fits[[4]], fits[[5]], fits[[6]],
+          dep.var.labels=c("DX62ALMI"), single.row=TRUE,
+          float = FALSE, header = FALSE, intercept.bottom = FALSE,
+          intercept.top = TRUE, model.numbers = FALSE)
+```
+\end{center}
+
+```{r, message=FALSE, fig.show="hold"}
+do.call(rbind, lapply(fits, function(fit) {
+  data.frame(rstd = rstandard(fit), fml = getfml(fit))
+})) %>%
+  ggplot(aes(sample = rstd)) +
+  stat_qq() +
+  stat_qq_line() +
+  facet_wrap(~ fml, ncol = 2) +
+  labs(title = "Normal Q-Q plot", x = "Theoretical Quantiles",
+       y = "Standardized residuals") +
+  theme(strip.text.x = element_text(size = rel(.6)))
+```
+
+<!-- ==================== VisceralAdiposeTissue (VAT) ===================== -->
 
 # VisceralAdiposeTissue (VAT)
 
@@ -331,11 +428,11 @@ rm(m1, m2)
 X <- c("T2DPreOp", "HTAPreOp", "DyslipidemiaPreOp", "T2DPostOp",
        "HTAPostOp", "DyslipidemiaPostOp")
 do.call(rbind, lapply(X, function(x) {
-  i0 <- !is.na(dta$VAT) & !is.na(dta[[x]]) & dta[[x]] == 0
-  i1 <- !is.na(dta$VAT) & !is.na(dta[[x]]) & dta[[x]] == 1
-  u0 <- dta[i0, "VAT"]
-  u1 <- dta[i1, "VAT"]
-  fml <- as.formula(paste("VAT ~", x))
+  i0 <- !is.na(dta$DX55_VAT) & !is.na(dta[[x]]) & dta[[x]] == 0
+  i1 <- !is.na(dta$DX55_VAT) & !is.na(dta[[x]]) & dta[[x]] == 1
+  u0 <- dta[i0, "DX55_VAT"]
+  u1 <- dta[i1, "DX55_VAT"]
+  fml <- as.formula(paste("DX55_VAT ~", x))
   data.frame(
     Variable = x,
     N0 = sum(i0),
@@ -349,17 +446,20 @@ do.call(rbind, lapply(X, function(x) {
   )
 })) %>%
   kable(digits = 2, row.names = FALSE)
-dta[c("VAT", X)] %>%
-  gather(variable, value, -VAT) %>%
+```
+
+```{r, message=FALSE, fig.show="hold"}
+dta[c("DX55_VAT", X)] %>%
+  gather(variable, value, -DX55_VAT) %>%
   mutate(variable = factor(variable, X)) %>%
-  ggplot(aes(x = factor(value), y = VAT)) +
+  ggplot(aes(x = factor(value), y = DX55_VAT)) +
   geom_boxplot() +
   facet_wrap(~variable) +
   labs(x = "")
-dta[c("VAT", X)] %>%
-  gather(variable, value, -VAT) %>%
+dta[c("DX55_VAT", X)] %>%
+  gather(variable, value, -DX55_VAT) %>%
   mutate(variable = factor(variable, X), value = factor(value)) %>%
-  ggplot(aes(x = VAT, group = value, color = value)) +
+  ggplot(aes(x = DX55_VAT, group = value, color = value)) +
   stat_ecdf(geom = "step") +
   facet_wrap(~variable) +
   labs(y = "Probability",
@@ -367,3 +467,193 @@ dta[c("VAT", X)] %>%
   theme(legend.title = element_blank())
 rm(X)
 ```
+
+```{r, message=FALSE, fig.show="hold"}
+tmp <- dta %>% mutate(
+  T2DPreOp = factor(T2DPreOp),
+  T2DPostOp = factor(T2DPostOp)
+)
+aes_list <- list(
+  aes(y = DX55_VAT, x = DX59_FatMassTotPercent),
+  aes(y = DX55_VAT, x = DX59_FatMassTotPercent, color = T2DPreOp),
+  aes(y = DX55_VAT, x = DX59_FatMassTotPercent, color = T2DPostOp)
+)
+figs <- lapply(aes_list, function(aes_element) {
+  ggplot(tmp, aes_element) +
+    geom_point() +
+    geom_smooth(method = lm, formula = y ~ x, se = FALSE) +
+    theme(legend.position="top")
+})
+do.call(grid.arrange, append(figs, list(ncol = 2)))
+rm(tmp, aes_list, figs)
+```
+
+```{r}
+fits <- list(
+  lm(DX55_VAT ~ DX59_FatMassTotPercent_C, dta),
+  lm(DX55_VAT ~ T2DPreOp, dta),
+  lm(DX55_VAT ~ DX59_FatMassTotPercent_C + T2DPreOp, dta),
+  lm(DX55_VAT ~ DX59_FatMassTotPercent_C * T2DPreOp, dta),
+  lm(DX55_VAT ~ DX59_FatMassTotPercent_C, dta),
+  lm(DX55_VAT ~ T2DPostOp, dta),
+  lm(DX55_VAT ~ DX59_FatMassTotPercent_C + T2DPostOp, dta),
+  lm(DX55_VAT ~ DX59_FatMassTotPercent_C * T2DPostOp, dta)
+)
+```
+
+\begin{center}
+```{r, echo=FALSE, results='asis'}
+stargazer(fits[[1]], fits[[2]],
+          dep.var.labels=c("DX55VAT"), single.row=TRUE,
+          float = FALSE, header = FALSE, intercept.bottom = FALSE,
+          intercept.top = TRUE, model.numbers = FALSE)
+```
+\end{center}
+
+\begin{center}
+```{r, echo=FALSE, results='asis'}
+stargazer(fits[[3]], fits[[4]],
+          dep.var.labels=c("DX55VAT"), single.row=TRUE,
+          float = FALSE, header = FALSE, intercept.bottom = FALSE,
+          intercept.top = TRUE, model.numbers = FALSE)
+```
+\end{center}
+
+\begin{center}
+```{r, echo=FALSE, results='asis'}
+stargazer(fits[[5]], fits[[6]],
+          dep.var.labels=c("DX55VAT"), single.row=TRUE,
+          float = FALSE, header = FALSE, intercept.bottom = FALSE,
+          intercept.top = TRUE, model.numbers = FALSE)
+```
+\end{center}
+
+\begin{center}
+```{r, echo=FALSE, results='asis'}
+stargazer(fits[[7]], fits[[8]],
+          dep.var.labels=c("DX55VAT"), single.row=TRUE,
+          float = FALSE, header = FALSE, intercept.bottom = FALSE,
+          intercept.top = TRUE, model.numbers = FALSE)
+```
+\end{center}
+
+
+
+<!-- =========== VisceralAdiposeTissue (VAT) without Dx00000149 =========== -->
+
+# VisceralAdiposeTissue (VAT) without Dx00000149
+
+```{r}
+dta2 <- dta[dta$Id != "Dx00000149", ]
+X <- c("T2DPreOp", "HTAPreOp", "DyslipidemiaPreOp", "T2DPostOp",
+       "HTAPostOp", "DyslipidemiaPostOp")
+do.call(rbind, lapply(X, function(x) {
+  i0 <- !is.na(dta2$DX55_VAT) & !is.na(dta2[[x]]) & dta2[[x]] == 0
+  i1 <- !is.na(dta2$DX55_VAT) & !is.na(dta2[[x]]) & dta2[[x]] == 1
+  u0 <- dta2[i0, "DX55_VAT"]
+  u1 <- dta2[i1, "DX55_VAT"]
+  fml <- as.formula(paste("DX55_VAT ~", x))
+  data.frame(
+    Variable = x,
+    N0 = sum(i0),
+    Mean0 = mean(u0),
+    SD0 = sd(u0),
+    N1 = sum(i1),
+    Mean1 = mean(u1),
+    SD1 = sd(u1),
+    ttest.pv = t.test(fml, dta2[i0 | i1, ])$p.value,
+    wilcox.pv = wilcox.test(fml, dta2[i0 | i1, ])$p.value
+  )
+})) %>%
+  kable(digits = 2, row.names = FALSE)
+```
+
+```{r, message=FALSE, fig.show="hold"}
+dta2[c("DX55_VAT", X)] %>%
+  gather(variable, value, -DX55_VAT) %>%
+  mutate(variable = factor(variable, X)) %>%
+  ggplot(aes(x = factor(value), y = DX55_VAT)) +
+  geom_boxplot() +
+  facet_wrap(~variable) +
+  labs(x = "")
+dta2[c("DX55_VAT", X)] %>%
+  gather(variable, value, -DX55_VAT) %>%
+  mutate(variable = factor(variable, X), value = factor(value)) %>%
+  ggplot(aes(x = DX55_VAT, group = value, color = value)) +
+  stat_ecdf(geom = "step") +
+  facet_wrap(~variable) +
+  labs(y = "Probability",
+       title = "Empirical cumulative distribution functions") +
+  theme(legend.title = element_blank())
+rm(X)
+```
+
+```{r, message=FALSE, fig.show="hold"}
+tmp <- dta2 %>% mutate(
+  T2DPreOp = factor(T2DPreOp),
+  T2DPostOp = factor(T2DPostOp)
+)
+aes_list <- list(
+  aes(y = DX55_VAT, x = DX59_FatMassTotPercent),
+  aes(y = DX55_VAT, x = DX59_FatMassTotPercent, color = T2DPreOp),
+  aes(y = DX55_VAT, x = DX59_FatMassTotPercent, color = T2DPostOp)
+)
+figs <- lapply(aes_list, function(aes_element) {
+  ggplot(tmp, aes_element) +
+    geom_point() +
+    geom_smooth(method = lm, formula = y ~ x, se = FALSE) +
+    theme(legend.position="top")
+})
+do.call(grid.arrange, append(figs, list(ncol = 2)))
+rm(tmp, aes_list, figs)
+```
+
+```{r}
+fits <- list(
+  lm(DX55_VAT ~ DX59_FatMassTotPercent_C, dta2),
+  lm(DX55_VAT ~ T2DPreOp, dta2),
+  lm(DX55_VAT ~ DX59_FatMassTotPercent_C + T2DPreOp, dta2),
+  lm(DX55_VAT ~ DX59_FatMassTotPercent_C * T2DPreOp, dta2),
+  lm(DX55_VAT ~ DX59_FatMassTotPercent_C, dta2),
+  lm(DX55_VAT ~ T2DPostOp, dta2),
+  lm(DX55_VAT ~ DX59_FatMassTotPercent_C + T2DPostOp, dta2),
+  lm(DX55_VAT ~ DX59_FatMassTotPercent_C * T2DPostOp, dta2)
+)
+```
+
+\begin{center}
+```{r, echo=FALSE, results='asis'}
+stargazer(fits[[1]], fits[[2]],
+          dep.var.labels=c("DX55VAT"), single.row=TRUE,
+          float = FALSE, header = FALSE, intercept.bottom = FALSE,
+          intercept.top = TRUE, model.numbers = FALSE)
+```
+\end{center}
+
+\begin{center}
+```{r, echo=FALSE, results='asis'}
+stargazer(fits[[3]], fits[[4]],
+          dep.var.labels=c("DX55VAT"), single.row=TRUE,
+          float = FALSE, header = FALSE, intercept.bottom = FALSE,
+          intercept.top = TRUE, model.numbers = FALSE)
+```
+\end{center}
+
+\begin{center}
+```{r, echo=FALSE, results='asis'}
+stargazer(fits[[5]], fits[[6]],
+          dep.var.labels=c("DX55VAT"), single.row=TRUE,
+          float = FALSE, header = FALSE, intercept.bottom = FALSE,
+          intercept.top = TRUE, model.numbers = FALSE)
+```
+\end{center}
+
+\begin{center}
+```{r, echo=FALSE, results='asis'}
+stargazer(fits[[7]], fits[[8]],
+          dep.var.labels=c("DX55VAT"), single.row=TRUE,
+          float = FALSE, header = FALSE, intercept.bottom = FALSE,
+          intercept.top = TRUE, model.numbers = FALSE)
+```
+\end{center}
+
