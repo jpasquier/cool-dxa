@@ -1,0 +1,5 @@
+library(haven)
+library(writexl)
+setwd("~/Projects/Consultations/Favre Lucie (DXA)")
+dta <- read_dta("data-raw/BoneCOOL_data.dta")
+write_xlsx(list(BoneCOOL_data = dta), "~/BoneCOOL_data.xlsx")
