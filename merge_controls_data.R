@@ -5,30 +5,23 @@ library(writexl)
 setwd("~/Projects/Consultations/Favre Lucie (DXA)")
 
 # Import data
-labo <- read_xlsx("data-raw/OsteoLaus Données (labo 1 year).xlsx", "labo")
-dxa <- read_xlsx("data-raw/OsteoLaus Données (labo 1 year).xlsx", "DXA")
-
-# Rename variables
-all(dxa$`DX09_FatMass-membre superieur...7` == 
-  dxa$`DX09_FatMass-membre superieur...37`)
-names(dxa)[names(dxa) == "DX09_FatMass-membre superieur...7"] <-
-  "DX09_FatMass-membre superieur"
-names(dxa)[names(dxa) == "DX09_FatMass-membre superieur...37"] <-
-  "DX09_FatMass-membre superieur (2)"
+file_name <- "data-raw/All controles OsteoLaus et CoLaus.xlsx"
+dxa <- read_xlsx(file_name, sheet = "DXA données no blanck")
+labo <- read_xlsx(file_name, sheet = "Labo données tot")
+rm(file_name)
 
 # Recoding
-labo$V3_exam_DATE <- as.Date(labo$V3_exam_DATE)
-labo$V3_SCAN_DATE <- as.Date(labo$V3_SCAN_DATE)
 dxa$V3_SCAN_DATE <- as.Date(dxa$V3_SCAN_DATE)
+labo$V3_exam_DATE <- as.Date(labo$V3_exam_DATE)
 
 # Merge tables
-osteolaus <- merge(labo, dxa, by = "ID controles", all = TRUE,
-                   suffixes = c(" (labo)", " (dxa)"))
+all(labo$`ID controles` %in% dxa$`ID controles`)
+osteolaus <- merge(dxa, labo, by = "ID controles", suffixes = c("", " (labo)"))
 
-# Differences
-grep("\\((labo|dxa)\\)$", names(osteolaus), value = TRUE)
-osteolaus[1:6, c("DX03_age (labo)", "DX03_age (dxa)")]
-osteolaus[21:26, c("V3_SCAN_DATE (labo)", "V3_SCAN_DATE (dxa)")]
+# Select observations
+osteolaus <- subset(osteolaus, abs(V3_SCAN_DATE - V3_exam_DATE) <= 365)
 
 # Export
 write_xlsx(list(osteolaus = osteolaus), "~/osteolaus_data.xlsx")
+if (!dir.exists("data")) dir.create("data")
+save(osteolaus, file = "data/osteolaus.rda", compress = "xz")
