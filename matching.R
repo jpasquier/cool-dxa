@@ -16,8 +16,8 @@ options(width = 120)
 setwd("~/Projects/Consultations/Favre Lucie (DXA)")
 
 # Data
-data0 <- read_xlsx("data-raw/OsteoLaus DXA no blank.xlsx")
-data0 <- as.data.frame(data0)
+load("data/osteolaus.rda")
+data0 <- osteolaus[c("ID controles", "DX03_age", "DX06_BMI")]
 data1 <- read_xlsx("data-raw/COOL-OsteoLaus for stat (clean).xlsx",
                    sheet = "OsteoLaus + COOL subject")
 data1 <- as.data.frame(data1[data1[[12]] %in% 0, 9:11])
@@ -73,7 +73,7 @@ ctrl_ids <- unique(ctrl_ids)
 length(ctrl_ids)
 
 # Export results
-mdir <- "results/matching_20210322/1233_controls"
+mdir <- "results/matching_20210324"
 if (!dir.exists(mdir)) dir.create(mdir, recursive = TRUE)
 for (cs in names(mlist)) {
   for (r in names(mlist[[cs]])) {
@@ -102,7 +102,7 @@ pdf(file.path(mdir, "boxplot_bmi.pdf"))
 print(bps$bmi)
 dev.off()
 save(mlist, file = file.path(mdir, "mlist.rda"), compress = "xz")
-sink("results/matching_sessionInfo_20210322.txt")
+sink("results/matching_sessionInfo_20210324.txt")
 print(sessionInfo(), locale = FALSE)
 sink()
 
