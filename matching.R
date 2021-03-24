@@ -32,7 +32,7 @@ rm(data0, data1, coln)
 
 # Apperçu des données
 tmp <- data
-tmp$grp <- factor(tmp$grp, 0:1, c("OsteoLaus", "DXA"))
+tmp$grp <- factor(tmp$grp, 0:1, c("OsteoLaus", "COOL"))
 bps <- list()
 bps$age <- ggplot(tmp, aes(x = factor(grp), y = age)) +
   geom_boxplot() + labs(title = "Age", x = "")
