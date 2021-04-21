@@ -1,0 +1,155 @@
+---
+title: "VAT - Osteolaus"
+author: Jérôme Pasquier (Unisanté)
+date: 21 avril 2021
+geometry: margin=2cm
+output:
+  pdf_document:
+    keep_tex: false
+    toc: true
+    toc_depth: 3
+---
+
+```{r setup, include=FALSE}
+
+library(parallel)
+library(knitr)
+library(ggplot2)
+library(gridExtra)
+library(stargazer)
+
+# Options
+opts_chunk$set(echo = FALSE)
+options(mc.cores = detectCores())
+
+# Set working directory
+setwd("~/Projects/Consultations/Favre Lucie (DXA)/R")
+
+# Import data
+load("../data/osteolaus.rda")
+#load("../data/cool.rda")
+
+# Import matching data
+load("../results/matching_20210322/1233_controls/mlist.rda")
+
+# Definition of groups according to matching
+for(s in names(mlist)) {
+  u0 <- paste0("m_", s)
+  for (r in names(mlist[[s]])) {
+    u <- paste0(u0, "_", r)
+    mm <- mlist[[s]][[r]]$mm
+    #cool[[u]] <- cool$Id %in% mm[!is.na(mm$id_ctrl1), "id_exp"]
+    ctrl_ids <- na.omit(do.call(base::c, mm[grep("^id_ctrl", names(mm))]))
+    osteolaus[[u]] <- osteolaus$`ID controles` %in% ctrl_ids
+  }
+}
+rm(ctrl_ids, mm, r, s, u, u0)
+
+# Rename variables
+names(osteolaus)[grep("^DX55", names(osteolaus))] <- "DX55_VAT"
+names(osteolaus)[names(osteolaus) == "Dyslipidémia"] <- "Dyslipidemia"
+names(osteolaus)[grep("^DX59", names(osteolaus))] <- "DX59_FatMassTotPt"
+
+# List of matching
+M <- c("cs0_r11", "cs0_r21", "cs0_r31", "cs1_r11", "cs1_r21", "cs1_r31")
+M <- setNames(M, M)
+
+```
+
+# VAT ~ T2D, HTA, Dyslipidemia
+
+```{r}
+tbl <- do.call(rbind, lapply(M, function(m) {
+  dta <- osteolaus[osteolaus[[paste0("m_", m)]], ]
+  names(dta)[grep("^DX55", names(dta))] <- "DX55_VAT"
+  X <- c("T2D", "HTA", "Dyslipidemia")
+  do.call(rbind, lapply(X, function(x) {
+    i0 <- !is.na(dta$DX55_VAT) & !is.na(dta[[x]]) & dta[[x]] == 0
+    i1 <- !is.na(dta$DX55_VAT) & !is.na(dta[[x]]) & dta[[x]] == 1
+    u0 <- dta[i0, "DX55_VAT"]
+    u1 <- dta[i1, "DX55_VAT"]
+    fml <- as.formula(paste("DX55_VAT ~", x))
+    data.frame(
+      Matching = m,
+      Variable = x,
+      N0 = sum(i0),
+      Mean0 = mean(u0),
+      SD0 = sd(u0),
+      N1 = sum(i1),
+      Mean1 = mean(u1),
+      SD1 = sd(u1),
+      ttest.pv = t.test(fml, dta[i0 | i1, ])$p.value,
+      wilcox.pv = wilcox.test(fml, dta[i0 | i1, ])$p.value
+    )
+  }))
+}))
+kable(tbl, digits = 2, row.names = FALSE)
+```
+
+```{r, fig.dim=c(8,10), fig.align="center", out.width="100%"}
+lg <- do.call(rbind, lapply(M, function(m) {
+  X <- c("T2D", "HTA", "Dyslipidemia")
+  dta <- osteolaus[osteolaus[[paste0("m_", m)]], c("DX55_VAT", X)]
+  dta <- reshape(dta, varying = X, v.names = "value", timevar = "variable",
+                 times = X, direction = "long")
+  dta$variable <- factor(dta$variable, X)
+  cbind(matching = m, dta[!is.na(dta$value), ])
+}))
+lg$value <- factor(lg$value)
+lg <- na.omit(lg)
+ggplot(lg, aes(x = factor(value), y = DX55_VAT)) +
+  geom_boxplot() +
+  facet_grid(matching ~ variable) +
+  labs(x = "")
+rm(tbl)
+```
+
+# Fonctions de répartition empiriques
+
+```{r, fig.dim=c(8,10), fig.align="center", out.width="100%"}
+ggplot(lg, aes(x = DX55_VAT, group = value, color = value)) +
+  stat_ecdf(geom = "step") +
+  facet_grid(matching ~ variable) +
+  labs(y = "Probability",
+       title = "Empirical cumulative distribution functions") +
+  theme(legend.title = element_blank())
+```
+
+\newpage
+
+# Modèles de régression
+
+```{r}
+fits <- lapply(M, function(m) {
+  dta <- osteolaus[osteolaus[[paste0("m_", m)]], ]
+  dta$T2D <- factor(dta$T2D)
+  dta$DX59_FatMassTotPt_C <- dta$DX59_FatMassTotPt -
+    mean(dta$DX59_FatMassTotPt, na.rm = TRUE)
+  fig1 <- ggplot(dta, aes(y = DX55_VAT, x = DX59_FatMassTotPt)) +
+    geom_point() +
+    geom_smooth(method = lm, formula = y ~ x, se = FALSE)
+  fig2 <- ggplot(dta, aes(y = DX55_VAT, x = DX59_FatMassTotPt, color = T2D)) +
+    geom_point() +
+    geom_smooth(method = lm, formula = y ~ x, se = FALSE) +
+    theme(legend.position="top")
+  fits <- list(
+    lm(DX55_VAT ~ DX59_FatMassTotPt_C, dta),
+    lm(DX55_VAT ~ T2D, dta),
+    lm(DX55_VAT ~ DX59_FatMassTotPt_C + T2D, dta),
+    lm(DX55_VAT ~ DX59_FatMassTotPt_C * T2D, dta)
+  )
+  list(fits = fits, fig1 = fig1, fig2 = fig2)
+})
+```
+
+
+```{r}
+source("osteolaus_vat.R")
+```
+
+```{r, child='/tmp/osteolaus_vat.Rmd'}
+```
+
+```{r}
+trash <- file.remove("/tmp/osteolaus_vat.Rmd")
+```
