@@ -1,0 +1,117 @@
+---
+title: "LeanMass/ALMI ~ CaViD - Osteolaus"
+author: Jérôme Pasquier (Unisanté)
+date: 22 avril 2021
+geometry: margin=2cm
+output:
+  pdf_document:
+    keep_tex: false
+    toc: true
+    toc_depth: 3
+---
+
+```{r setup, include=FALSE}
+
+library(parallel)
+library(knitr)
+library(dplyr)
+library(ggplot2)
+library(gridExtra)
+library(stargazer)
+
+# Options
+opts_chunk$set(echo = FALSE)
+options(mc.cores = detectCores())
+
+# Set working directory
+setwd("~/Projects/Consultations/Favre Lucie (DXA)/R")
+
+# Import data
+load("../data/osteolaus.rda")
+
+# Import matching data
+load("../results/matching_20210322/1233_controls/mlist.rda")
+
+# Definition of groups according to matching
+for(s in names(mlist)) {
+  u0 <- paste0("m_", s)
+  for (r in names(mlist[[s]])) {
+    u <- paste0(u0, "_", r)
+    mm <- mlist[[s]][[r]]$mm
+    ctrl_ids <- na.omit(do.call(base::c, mm[grep("^id_ctrl", names(mm))]))
+    osteolaus[[u]] <- osteolaus$`ID controles` %in% ctrl_ids
+  }
+}
+rm(ctrl_ids, mm, r, s, u, u0)
+
+# Rename variables
+names(osteolaus)[grep("^DX55", names(osteolaus))] <- "DX55_VAT"
+osteolaus <- osteolaus %>%
+  rename(DX58_LeanMassTotPt = `DX58_LeanMassTot%`)
+
+# List of matching
+M <- c("cs0_r11", "cs0_r21", "cs0_r31", "cs1_r11", "cs1_r21", "cs1_r31")
+M <- setNames(M, M)
+
+```
+
+```{r}
+
+do.call(rbind, lapply(M, function(m) {
+  Y <- c("DX58_LeanMassTotPt", "DX62_ALMI")
+  do.call(rbind, lapply(Y, function(y) {
+    dta <- osteolaus[osteolaus[[paste0("m_", m)]], c(y, "CaVitD")]
+    dta <- na.omit(dta)
+    n <- length
+    fml <- as.formula(paste(y, "~ CaVitD"))
+    Fct <- c("n", "mean", "sd", "median", "IQR", "min", "max")
+    Merge <- function(u, v) merge(u, v, by = "CaVitD")
+    tbl <- Reduce(Merge, lapply(Fct, function(fct) {
+      tbl <- aggregate(fml, dta, get(fct))
+      names(tbl)[2] <- fct
+      tbl
+    }))
+    cbind(matching = m, outcome = y, tbl)
+  }))
+})) %>%
+  kable(digits = 2, row.names = FALSE)
+
+```
+
+# Modèles de régression
+
+```{r}
+m <- M[[1]]
+fits <- lapply(M, function(m) {
+  dta <- osteolaus[osteolaus[[paste0("m_", m)]], ]
+  tmp1 <- dta %>%
+    mutate(CaVitD = factor(CaVitD)) %>%
+    filter(!is.na(CaVitD), !is.na(DX58_LeanMassTotPt))
+  fig1 <- ggplot(tmp1, aes(x = CaVitD, y = DX58_LeanMassTotPt)) +
+    geom_boxplot() +
+    labs(caption = paste("n =", nrow(tmp)))
+  tmp2 <- dta %>%
+    mutate(CaVitD = factor(CaVitD)) %>%
+    filter(!is.na(CaVitD), !is.na(DX62_ALMI))
+  fig2 <- ggplot(tmp1, aes(x = CaVitD, y = DX62_ALMI)) +
+    geom_boxplot() +
+    labs(caption = paste("n =", nrow(tmp)))
+  fit1 <- lm(DX58_LeanMassTotPt ~ CaVitD, dta)
+  fit1a <- lm(DX58_LeanMassTotPt ~ CaVitD + DX03_age + DX06_BMI, dta)
+  fit2 <- lm(DX62_ALMI ~ CaVitD, dta)
+  fit2a <- lm(DX62_ALMI ~ CaVitD + DX03_age + DX06_BMI, dta)
+  return(list(fit1 = fit1, fit1a = fit1a, fit2 = fit2, fit2a = fit2a,
+              fig1 = fig1, fig2 = fig2))
+})
+```
+
+```{r}
+source("osteolaus_cavitd.R")
+```
+
+```{r, child='/tmp/osteolaus_cavitd.Rmd'}
+```
+
+```{r}
+trash <- file.remove("/tmp/osteolaus_cavitd.Rmd")
+```

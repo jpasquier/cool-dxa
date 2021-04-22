@@ -58,7 +58,7 @@ Y <- list(
   list(y = "DX03_age", subgrp = "all"),
   list(y = "T2D-PostOp", subgrp = "all"),
   list(y = "HTA-PostOp", subgrp = "all"),
-  list(y = "Dyslipidemia-PostOp", subgrp = "all"),
+#  list(y = "Dyslipidemia-PostOp", subgrp = "all"),
   list(y = "TTT_lipid PostOp", subgrp = "all"),
   list(y = "TTT_DT2 PostOp", subgrp = "all"),
   list(y = "Insul", subgrp = "all"),
@@ -76,7 +76,7 @@ Y <- list(
   list(y = "ALAT", subgrp = "all"),
   list(y = "GGT", subgrp = "all"),
   list(y = "PA", subgrp = "all"),
-  list(y = "CRP", subgrp = "all"),
+#  list(y = "CRP", subgrp = "all"),
   list(y = "PTH", subgrp = "all"),
   list(y = "VitD1", subgrp = "all"),
   list(y = "DX09_FatMass-membre superieur", subgrp = "all"),
@@ -102,7 +102,17 @@ Y <- list(
   list(y = "DX62_ALMI", subgrp = "all"),
   list(y = "DX55_Tissu adipeux viscéral (VAT)", subgrp = "all"),
   list(y = "DX56_VATvol", subgrp = "all"),
-  list(y = "DX52_Contenu minéral osseux", subgrp = "all")
+  list(y = "DX52_Contenu minéral osseux", subgrp = "all"),
+  list(y = "DX58_LeanMassTot%", subgrp = "age > 60y"),
+  list(y = "DX62_ALMI", subgrp = "age > 60y"),
+  list(y = "DX55_Tissu adipeux viscéral (VAT)", subgrp = "age > 60y"),
+  list(y = "DX24_Lean Mass Tot", subgrp = "age > 60y"),
+  list(y = "DX59_FatMassTotale%", subgrp = "age > 60y"),
+  list(y = "DX58_LeanMassTot%", subgrp = "surg. >= 50y"),
+  list(y = "DX62_ALMI", subgrp = "surg. >= 50y"),
+  list(y = "DX55_Tissu adipeux viscéral (VAT)", subgrp = "surg. >= 50y"),
+  list(y = "DX24_Lean Mass Tot", subgrp = "surg. >= 50y"),
+  list(y = "DX59_FatMassTotale%", subgrp = "surg. >= 50y")
 )
 
 # List of matchings
@@ -132,13 +142,16 @@ tbls <- mclapply(M, function(m) {
     id_exp <- mm[i.id, "id_exp"]
     id_ctrl <- lapply(grep("^id_ctrl", names(mm)), function(z) mm[i.id, z])
     dta_exp <- cool[match(id_exp, cool$Id),
-                    unique(c(y, "DX06_BMI", "DX03_age"))]
+                    unique(c(y, "DX06_BMI", "DX03_age", "Age_at_surgery"))]
     i_exp <- !is.na(dta_exp[[y]])
     if (subgrp == "age > 60y") {
       i_subgrp <- dta_exp$DX03_age > 60
+    } else if (subgrp == "surg. >= 50y") {
+      i_subgrp <- dta_exp$Age_at_surgery >= 50
     } else {
       i_subgrp <- rep(TRUE, nrow(dta_exp))
     }
+    dta_exp$Age_at_surgery <- NULL
     if (y %in% Y_cool_only) {
       i <- i_exp
       fig <- ggplot(dta_exp[i, ], aes(y = !!sym(y))) +
@@ -207,8 +220,9 @@ tbls <- mclapply(M, function(m) {
     lg$grp <- factor(lg$grp, 0:1, c("OsteoLaus", "COOL"))
     fig <- ggplot(lg, aes(x = grp, y = !!sym(y))) +
       geom_boxplot() +
-      labs(x = "")
+      labs(x = "", caption = paste("subgroup:", subgrp))
     attr(fig, "var") <- y
+    attr(fig, "subgrp") <- gsub(" |\\.|=|>", "", subgrp)
     r <- data.frame(
       variable           = y,
       subgroup           = subgrp,
@@ -241,7 +255,7 @@ tbls <- mclapply(M, function(m) {
 })
 
 # Export results
-u <- "results/cohorts_description_20210421"
+u <- "results/cohorts_description_20210422"
 write_xlsx(tbls, paste0(u, ".xlsx"))
 d0 <- paste0(u, "_figs")
 if (!dir.exists(d0)) dir.create(d0)
@@ -250,7 +264,8 @@ for(m in names(tbls)) {
   if (!dir.exists(d1)) dir.create(d1)
   figs <- attr(tbls[[m]], "figs")
   for (fig in figs) {
-    f <- file.path(d1, paste0(attr(fig, "var"), ".ps"))
+    f <- file.path(d1, paste0(attr(fig, "var"), "_",
+                              attr(fig, "subgrp"), ".ps"))
     postscript(f)
     print(fig)
     dev.off()
