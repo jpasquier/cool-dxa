@@ -49,8 +49,13 @@ names(osteolaus)[names(osteolaus) == "DX16_FMTot"] <- "DX16_FatMassTot"
 names(cool)[grep("DX62_ALMI \\(.+\\)$", names(cool))] <- "DX62_ALMI"
 
 # Rescale variables
-osteolaus[["DX49_FatMassAndroide%"]] <- osteolaus[["DX49_FatMassAndroide%"]] * 100
-osteolaus[["DX50_FatMassGynoide%"]] <- osteolaus[["DX50_FatMassGynoide%"]] * 100
+osteolaus[["DX49_FatMassAndroide%"]] <-
+  osteolaus[["DX49_FatMassAndroide%"]] * 100
+osteolaus[["DX50_FatMassGynoide%"]] <-
+  osteolaus[["DX50_FatMassGynoide%"]] * 100
+
+# Calculate HOMA in control group
+osteolaus$HOMA <- osteolaus$Insul * osteolaus$glyc / 22.5
 
 # Variables to describe and compare
 Y <- list(
@@ -61,6 +66,7 @@ Y <- list(
 #  list(y = "Dyslipidemia-PostOp", subgrp = "all"),
   list(y = "TTT_lipid PostOp", subgrp = "all"),
   list(y = "TTT_DT2 PostOp", subgrp = "all"),
+  list(y = "glyc", subgrp = "all"),
   list(y = "Insul", subgrp = "all"),
   list(y = "HOMA", subgrp = "all"),
   list(y = "CaCo", subgrp = "all"),
@@ -132,7 +138,7 @@ Y <- lapply(Y, function(y) {y$y <- renvar(y$y); y})
 
 # Results
 tbls <- mclapply(M, function(m) {
-  Y_cool_only <- c("HOMA", "CRP", "PTH", "VitD1")
+  Y_cool_only <- c("CRP", "PTH", "VitD1")
   m0 <- paste(m, collapse = "_")
   L <- mclapply(Y, function(y) {
     subgrp <- y$subgrp
@@ -255,7 +261,7 @@ tbls <- mclapply(M, function(m) {
 })
 
 # Export results
-u <- "results/cohorts_description_20210422"
+u <- "results/cohorts_description_20210503"
 write_xlsx(tbls, paste0(u, ".xlsx"))
 d0 <- paste0(u, "_figs")
 if (!dir.exists(d0)) dir.create(d0)
