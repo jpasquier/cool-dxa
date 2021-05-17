@@ -57,6 +57,10 @@ osteolaus[["DX50_FatMassGynoide%"]] <-
 # Calculate HOMA in control group
 osteolaus$HOMA <- osteolaus$Insul * osteolaus$glyc / 22.5
 
+# Recode CRP in the COOL cohort (see S. Santini's email, May 17, 2021)
+cool$CRP[cool$CRP == "<1"] <- 0.9
+cool$CRP <- as.numeric(cool$CRP)
+
 # Variables to describe and compare
 Y <- list(
   list(y = "DX06_BMI", subgrp = "all"),
@@ -82,7 +86,7 @@ Y <- list(
   list(y = "ALAT", subgrp = "all"),
   list(y = "GGT", subgrp = "all"),
   list(y = "PA", subgrp = "all"),
-#  list(y = "CRP", subgrp = "all"),
+  list(y = "CRP", subgrp = "all"),
   list(y = "PTH", subgrp = "all"),
   list(y = "VitD1", subgrp = "all"),
   list(y = "DX09_FatMass-membre superieur", subgrp = "all"),
@@ -138,9 +142,9 @@ Y <- lapply(Y, function(y) {y$y <- renvar(y$y); y})
 
 # Results
 tbls <- mclapply(M, function(m) {
-  Y_cool_only <- c("CRP", "PTH", "VitD1")
+  Y_cool_only <- c("PTH", "VitD1")
   m0 <- paste(m, collapse = "_")
-  L <- mclapply(Y, function(y) {
+  L <- lapply(Y, function(y) {
     subgrp <- y$subgrp
     y <- y$y
     mm <- mlist[[m[1]]][[m[2]]]$mm
@@ -162,8 +166,9 @@ tbls <- mclapply(M, function(m) {
       i <- i_exp
       fig <- ggplot(dta_exp[i, ], aes(y = !!sym(y))) +
         geom_boxplot() +
-        labs(x = "COOL")
+        labs(x = "COOL", caption = paste("subgroup:", subgrp))
         attr(fig, "var") <- y
+        attr(fig, "subgrp") <- gsub(" |\\.|=|>", "", subgrp)
       r <- data.frame(
         variable = y, subgroup = subgrp, n = sum(i), mean_osteolaus = NA,
         sd_osteolaus = NA, mean_cool = mean(dta_exp[i, y]), 
@@ -261,7 +266,7 @@ tbls <- mclapply(M, function(m) {
 })
 
 # Export results
-u <- "results/cohorts_description_20210503"
+u <- "results/cohorts_description_20210517"
 write_xlsx(tbls, paste0(u, ".xlsx"))
 d0 <- paste0(u, "_figs")
 if (!dir.exists(d0)) dir.create(d0)
