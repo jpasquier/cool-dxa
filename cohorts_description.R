@@ -122,7 +122,10 @@ Y <- list(
   list(y = "DX62_ALMI", subgrp = "surg. >= 50y"),
   list(y = "DX55_Tissu adipeux viscéral (VAT)", subgrp = "surg. >= 50y"),
   list(y = "DX24_Lean Mass Tot", subgrp = "surg. >= 50y"),
-  list(y = "DX59_FatMassTotale%", subgrp = "surg. >= 50y")
+  list(y = "DX59_FatMassTotale%", subgrp = "surg. >= 50y"),
+  list(y = "DX06_BMI", subgrp = "surg. >= 50y"),
+  list(y = "DX03_age", subgrp = "surg. >= 50y"),
+  list(y = "DX16_FatMassTot", subgrp = "surg. >= 50y")
 )
 
 # List of matchings
@@ -266,7 +269,7 @@ tbls <- mclapply(M, function(m) {
 })
 
 # Export results
-u <- "results/cohorts_description_20210517"
+u <- "results/cohorts_description_20210722"
 write_xlsx(tbls, paste0(u, ".xlsx"))
 d0 <- paste0(u, "_figs")
 if (!dir.exists(d0)) dir.create(d0)
