@@ -1,7 +1,9 @@
 library(car)
 library(ggplot2)
+library(officer)
 library(parallel)
 library(readxl)
+library(rvg)
 library(writexl)
 
 options(mc.cores = detectCores() - 1) 
@@ -57,7 +59,7 @@ for (i in 1:nrow(rename_matrix)) {
 rm(rename_matrix, i)
 dta$FollowUpYears <- as.numeric(dta$DXA_Date - dxa$`Date Bariatric surgery`)
 dta$FollowUpYears <- dta$FollowUpYears / 365.2425
-dta$WeightRegain <- (1 - dta$DX05_weight / dta$NadirWeight) * 100
+dta$WeightRegain <- (dta$DX05_weight / dta$NadirWeight - 1) * 100
 dta$DX03_age_C <- dta$DX03_age - mean(dta$DX03_age)
 dta$TotalWeightLoss_C <- dta$TotalWeightLoss - mean(dta$TotalWeightLoss)
 dta$NadirWeight_C <- dta$NadirWeight - mean(dta$NadirWeight)
@@ -132,7 +134,23 @@ for (figs in uvreg_figs) {
   }
 }
 dev.off()
-rm(figs, fig)
+o <- file.path(outdir, "regressions_univariables")
+if (!dir.exists(o)) dir.create(o)
+for (figs in uvreg_figs) {
+  for (fig in figs) {
+    f <- paste0(o, "/", fig$labels$y, "_", fig$labels$x)
+    f <- paste0(f, c(".tiff", ".pptx"))
+    #tiff(f[1], width = 4800, height = 4800, res = 1152, compression = "zip")
+    #print(fig)
+    #dev.off()
+    doc <- read_pptx()
+    doc <- add_slide(doc, 'Title and Content', 'Office Theme')
+    anyplot <- dml(ggobj = fig)
+    doc <- ph_with(doc, anyplot, location = ph_location_fullsize())
+    print(doc, target = f[2])
+  }
+}
+rm(figs, fig, o, f, doc, anyplot)
 
 # Multivariable regressions
 mvreg <- mclapply(setNames(Y, Y), function(y) {
